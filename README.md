@@ -35,6 +35,7 @@
 ---
 ##### Instructions for usage of this software (includes executing, testing, linting, and profiling):
 To perform memory checking, memory leak analysis, and profiling using [Valgrind](http://valgrind.org/docs/manual/quick-start.html), execute the following (assumes you are in the appropriate *build* folder (see step 5 above):
+**Note: ensure unit test material is unzipped from compressed folder**
 ```bash
 $ valgrind --leak-check=yes -v ./idft
 $ valgrind --leak-check=yes -v ./tests
@@ -46,6 +47,7 @@ $ cppcheck --enable=all inverse_direct_fourier_transform.cu
 $ cppcheck --enable=all unit_testing.cpp
 ```
 To execute unit testing, execute the following (also assumes appropriate *build* folder):
+**Note: ensure unit test material is unzipped from compressed folder**
 ```bash
 $ ./tests
 ````
