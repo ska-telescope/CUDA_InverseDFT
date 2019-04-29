@@ -1,19 +1,32 @@
- 
-// Copyright 2019 Seth Hall, Adam Campbell, Andrew Ensor
-// High Performance Computing Research Laboratory, 
-// Auckland University of Technology (AUT)
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+
+// Copyright 2019 Adam Campbell, Seth Hall, Andrew Ensor
+// Copyright 2019 High Performance Computing Research Laboratory, Auckland University of Technology (AUT)
+
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+
+// 1. Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+
+// 2. Redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution.
+
+// 3. Neither the name of the copyright holder nor the names of its
+// contributors may be used to endorse or promote products derived from this
+// software without specific prior written permission.
+
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstdlib>
 #include <cstdio>
@@ -48,35 +61,35 @@ void init_config(Config *config)
 {	
 	printf(">>> UPDATE: Loading configuration...\n\n");
 
-	//Output files with paths for the resulting image, seperating real and imaginary components
+	// Output files with paths for the resulting image, seperating real and imaginary components
 	config->output_image_file      = "../iDFT_test_500.csv";
 
 	// Visibility Source file for the iDFT
 	config->vis_file               = "../unit_test_visibilities_500_sources.txt";
 
-	//Flag to enable Point Spread Function
+	// Flag to enable Point Spread Function
 	config->psf_enabled            = false;
 
 	// Frequency of visibility uvw terms in hertz
 	config->frequency_hz           = 300000000;
 
-	//specify single cell size in radians
+	// specify single cell size in radians
 	config->cell_size              = 4.848136811095360e-06;
 
-	//the size (in pixels) of resulting image, where image coordinates range -image_size/2 to +image_size/2
+	// the size (in pixels) of resulting image, where image coordinates range -image_size/2 to +image_size/2
 	config->image_size             = 1024.0;
 
-	//if the image is too big, can specify a subregion where x_render and y_render offsets are the bottom corner of image
-	//and render_size the amount of pixels from those coordinates in each direction you want your image. 0,0 is middle of image.
+	// if the image is too big, can specify a subregion where x_render and y_render offsets are the bottom corner of image
+	// and render_size the amount of pixels from those coordinates in each direction you want your image. 0,0 is middle of image.
 	config->render_size            = 256;
 	config->x_render_offset        = -128;
 	config->y_render_offset        = -128;
 
-	//Set the data to be right ascension, flips the u and w coordinate.
+	// Set the data to be right ascension, flips the u and w coordinate.
 	config->enable_right_ascension = false;
 
-	//set amount of visibilities per batch size, use 0 for no batching..
-	//Will do a remainder batch if visibility count not divisible by batch size
+	// set amount of visibilities per batch size, use 0 for no batching..
+	// Will do a remainder batch if visibility count not divisible by batch size
 	config->vis_batch_size         = 0;
 }
 
@@ -88,24 +101,24 @@ void create_perfect_image(Config *config, Complex *grid, Visibility *visibilitie
 {
 	printf(">>> UPDATE:  Configuring iDFT and allocating GPU memory for grid (image)...\n\n");
 
-	//Pointers for GPU memory
+	// Pointers for GPU memory
 	double2 *d_g;
 	double3 *v_k;
 	double2 *vi_k;
 
-	//use pitch to align data on GPU
+	// use pitch to align data on GPU
 	size_t g_pitch;
 	CUDA_CHECK_RETURN(cudaMallocPitch(&d_g, &g_pitch, config->render_size * sizeof(Complex), config->render_size));
 
-	//copy grid (image) to GPU using pitch
+	// copy grid (image) to GPU using pitch
 	CUDA_CHECK_RETURN((cudaMemcpy2D(d_g, g_pitch, grid, config->render_size * sizeof(Complex),
 		config->render_size * sizeof(Complex), config->render_size, cudaMemcpyHostToDevice)));
 
-	//set BLOCK and THREAD count for CUDA configuration : ToDO later, make more dynamic depending on hardware
+	// set BLOCK and THREAD count for CUDA configuration : ToDO later, make more dynamic depending on hardware
 	dim3 kernel_blocks(8, 8, 1);
 	dim3 kernel_threads((config->render_size)/8, (config->render_size)/8, 1);  //can play with block and thread sizes
 
-	//calculate number of batches and determine any remainder visibilities
+	// calculate number of batches and determine any remainder visibilities
 	int number_of_batches = 1;
 	int visibilities_on_last_batch = 0;
 	int visibilities_per_batch = config->vis_count;
@@ -119,14 +132,14 @@ void create_perfect_image(Config *config, Complex *grid, Visibility *visibilitie
 	printf(">>> UPDATE: Setting %d batches of %d visibilities with a possible remainder batch of %d...\n\n",
 			number_of_batches, visibilities_per_batch, visibilities_on_last_batch);
 	
-	//allocate CUDA memory for visibility data
+	// allocate CUDA memory for visibility data
 	printf(">>> UPDATE: Allocating GPU memory for visibilities...\n\n");
 
 	CUDA_CHECK_RETURN(cudaMalloc(&v_k, visibilities_per_batch * sizeof(Visibility)));
 
 	CUDA_CHECK_RETURN(cudaMalloc(&vi_k,visibilities_per_batch * sizeof(Complex)));
 
-	//Perform iDFT on each batch
+	// Perform iDFT on each batch
 	for(int i=0;i<number_of_batches;++i)
 	{	
 		int offset = i*	visibilities_per_batch;
@@ -139,8 +152,9 @@ void create_perfect_image(Config *config, Complex *grid, Visibility *visibilitie
 		cudaDeviceSynchronize();
 
 		printf(">>> UPDATE: Executing iDFT CUDA kernel...\n\n");
-		//iDFT performed on a portion of the image (assuming 0,0 in center of image), coordinates are from x and y render offset
-		//origin to render size - Image must be square
+
+		// iDFT performed on a portion of the image (assuming 0,0 in center of image), coordinates are from x and y render offset
+		// origin to render size - Image must be square
 		inverse_dft_with_w_correction<<<kernel_threads, kernel_blocks>>>(d_g, g_pitch, v_k, vi_k,
 			config->vis_count, visibilities_per_batch, config->x_render_offset,
 			config->y_render_offset, config->render_size, config->cell_size);
@@ -149,7 +163,7 @@ void create_perfect_image(Config *config, Complex *grid, Visibility *visibilitie
 		printf(">>> UPDATE: Completed %d batch \n\n",(i+1));
 	}
 
-	//Perform iDFT on any remainder visibility data
+	// Perform iDFT on any remainder visibility data
 	if(visibilities_on_last_batch > 0)
 	{
 		printf(">>> UPDATE: Sending %d remaining visibilities for final processing...  \n\n",  visibilities_on_last_batch);
@@ -171,7 +185,7 @@ void create_perfect_image(Config *config, Complex *grid, Visibility *visibilitie
 		cudaDeviceSynchronize();
 	}
 
-	//copy image data back from the GPU to CPU
+	// copy image data back from the GPU to CPU
 	printf(">>> UPDATE: Batch processing complete...  \n\n");
 	printf(">>> UPDATE: Copying image data from GPU back to host...\n\n");
 	CUDA_CHECK_RETURN(cudaMemcpy2D(grid, config->render_size * sizeof(double2), d_g, g_pitch,
@@ -197,10 +211,10 @@ void load_visibilities(Config *config, Visibility **visibilities, Complex **vis_
 		return;
 	}
 	else
-	{	//read the amount of visibilities in file
+	{	// read the amount of visibilities in file
 		fscanf(file, "%d\n", &(config->vis_count));
 
-		//allocate visibility u,v,w and associated intensity value
+		// allocate visibility u,v,w and associated intensity value
 		*visibilities = (Visibility*) calloc(config->vis_count, sizeof(Visibility));
 		*vis_intensity = (Complex*) calloc(config->vis_count, sizeof(Complex));
 		if(*visibilities == NULL || *vis_intensity == NULL) 
@@ -224,11 +238,11 @@ void load_visibilities(Config *config, Visibility **visibilities, Complex **vis_
 			fscanf(file, "%lf %lf %lf %lf %lf %lf\n", &temp_uu, &temp_vv, &temp_ww,
 				&temp_real, &temp_imag, &temp_weight);
 
-			//Flip u and v coordinate if data should be right ascension
+			// Flip u and v coordinate if data should be right ascension
 			temp_uu = temp_uu * right_asc_factor;
 			temp_ww = temp_ww * right_asc_factor;
 
-			//use weight to adjust the real, imag or set real to one if psf enabled
+			// use weight to adjust the real, imag or set real to one if psf enabled
 			if(config->psf_enabled)
 			{
 				temp_real = 1.0;
@@ -238,13 +252,11 @@ void load_visibilities(Config *config, Visibility **visibilities, Complex **vis_
 			{	temp_real = temp_real * temp_weight;
 				temp_imag = temp_imag * temp_weight;
 			}
-			//convert uvw from meters to wavelengths
+			// convert uvw from meters to wavelengths
 			temp_uu = temp_uu * wavelength_factor;
 			temp_vv = temp_vv * wavelength_factor;
 			temp_ww = temp_ww * wavelength_factor;
 
-			//NOW CONVERT EACH uu-vv to gridcoordinates
-			//NOTE x,y,z,w
 			(*visibilities)[i] = (Visibility){.u = temp_uu, .v = temp_vv, .w = temp_ww};
 			(*vis_intensity)[i] = (Complex){.real = temp_real, .imaginary = temp_imag};
 		}
@@ -256,7 +268,7 @@ void load_visibilities(Config *config, Visibility **visibilities, Complex **vis_
 }
 
 
-//saves a csv file of the rendered iDFT region only
+// saves a csv file of the rendered iDFT region only
 void save_grid_to_file(Config *config, Complex *grid)
 {
     FILE *file_real = fopen(config->output_image_file, "w");
@@ -292,12 +304,12 @@ void save_grid_to_file(Config *config, Complex *grid)
     printf(">>> UPDATE: RealSum: %f, ImagSum: %f...\n\n", real_sum, imag_sum);
 }
 
-/// visibilities (x,y,z) = (uu,vv,ww), visIntensity (x,y) = (real, imaginary), grid (x,y) = (real, imaginary)
+// visibilities (x,y,z) = (uu,vv,ww), visIntensity (x,y) = (real, imaginary), grid (x,y) = (real, imaginary)
 __global__ void inverse_dft_with_w_correction(double2 *grid, size_t grid_pitch, const double3 *visibilities,
 		const double2 *vis_intensity, int vis_count, int batch_count, int x_offset, int y_offset,
 		int render_size, double cell_size)
 {
-	//look up id of thread
+	// look up id of thread
 	int idx = blockIdx.x*blockDim.x + threadIdx.x;
 	int idy = blockIdx.y*blockDim.y + threadIdx.y;
 
@@ -306,20 +318,22 @@ __global__ void inverse_dft_with_w_correction(double2 *grid, size_t grid_pitch, 
 
 	double real_sum = 0;
 	double imag_sum = 0;
-	//convert to x and y image coordinates
+
+	// convert to x and y image coordinates
 	double x = (idx+x_offset) * cell_size;
     double y = (idy+y_offset) * cell_size;
 
 	double2 vis;
 	double2 theta_complex;
 
-	//precalculate image correction and wCorrection
+	// precalculate image correction and wCorrection
 	double image_correction = sqrt(1.0 - (x * x) - (y * y));
 	double w_correction = image_correction - 1.0;
 
-	// NOTE below is an approxiamation... could use this??? Uncomment if needed
+	// NOTE: below is an approximation... Uncomment if needed
 	// double wCorrection = -((x*x)+(y*y))/2.0;
-	//loop through all visibilities and create sum using iDFT formula
+
+	// loop through all visibilities and create sum using iDFT formula
 	for(int i = 0; i < batch_count; ++i)
 	{	
 		double theta = 2.0 * M_PI * (x * visibilities[i].x + y * visibilities[i].y
@@ -329,16 +343,18 @@ __global__ void inverse_dft_with_w_correction(double2 *grid, size_t grid_pitch, 
 		real_sum += vis.x;
 		imag_sum += vis.y;
 	}
-	//adjust sum by image correction
+
+	// adjust sum by image correction
 	real_sum *= image_correction;
 	imag_sum *= image_correction;
-	//look up destination in image (grid) and divide by amount of visibilities (N)
+
+	// look up destination in image (grid) and divide by amount of visibilities (N)
 	double2 *row = (double2*)((char*)grid + idy * grid_pitch);
 	row[idx].x += (real_sum / vis_count);
 	row[idx].y += (imag_sum / vis_count);
 }
 
-//done on GPU, performs a complex multiply of two complex numbers
+// done on GPU, performs a complex multiply of two complex numbers
 __device__ double2 complex_multiply(double2 z1, double2 z2)
 {
     double real = z1.x*z2.x - z1.y*z2.y;
@@ -346,7 +362,7 @@ __device__ double2 complex_multiply(double2 z1, double2 z2)
     return make_double2(real, imag);
 }
 
-//used for performance testing to return the difference in milliseconds between two timeval structs
+// used for performance testing to return the difference in milliseconds between two timeval structs
 float time_difference_msec(struct timeval t0, struct timeval t1)
 {
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
