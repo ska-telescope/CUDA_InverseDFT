@@ -1,6 +1,6 @@
  
 # Inverse Direct Fourier Transform - CUDA Implementation
-###### Note: currently only supported by NVIDIA GPUs (limitation of CUDA), generalized OpenCL version in progress.
+###### Note: currently only supported by NVIDIA GPUs (limitation of CUDA)
 ---
 ##### Instructions for installation of this software (includes profiling, linting, building, and unit testing):
 1. Ensure you have an NVIDIA based GPU (**mandatory!**)
@@ -26,11 +26,15 @@
    $ sudo apt install cppcheck
    ```
 7. Configure the code for usage (**modify inverse_direct_fourier_transform.cu config**)
-8. Build direct fourier transform project (from project folder)
-   ```bash
+8. Create local execution folder
+    ```bash
    $ mkdir build && cd build
-   $ cmake .. -DCMAKE_BUILD_TYPE=Debug && make
    ```
+9. Build direct fourier transform project (from project folder)
+   ```bash
+   $ cmake .. -DCMAKE_BUILD_TYPE=Release && make
+   ```
+10. **Important: set -CDMAKE_BUILD_TYPE=Debug if planning to run Valgrind. Debug mode disables compiler optimizations, which is required for Valgrind to perform an optimal analysis.**
 
 ---
 ##### Instructions for usage of this software (includes executing, testing, linting, and profiling):
