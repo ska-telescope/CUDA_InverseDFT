@@ -69,6 +69,7 @@ typedef struct Config {
 	double frequency_hz;
 	bool enable_right_ascension;
 	int vis_batch_size;
+	int gpu_num_threads_per_block_dimension;
 } Config;
 
 //Define struct for visibility coordinate

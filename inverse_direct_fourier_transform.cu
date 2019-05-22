@@ -62,28 +62,28 @@ void init_config(Config *config)
 	printf(">>> UPDATE: Loading configuration...\n\n");
 
 	// Output files with paths for the resulting image, seperating real and imaginary components
-	config->output_image_file      = "../iDFT_test_500.csv";
+	config->output_image_file      = "../output_image.csv";
 
 	// Visibility Source file for the iDFT
-	config->vis_file               = "../unit_test_visibilities_500_sources.txt";
+	config->vis_file               = "../sample_visibilities.csv";
 
 	// Flag to enable Point Spread Function
 	config->psf_enabled            = false;
 
 	// Frequency of visibility uvw terms in hertz
-	config->frequency_hz           = 300000000;
+	config->frequency_hz           = 100e6;
 
 	// specify single cell size in radians
-	config->cell_size              = 4.848136811095360e-06;
+	config->cell_size              = 6.39708380288950e-6;
 
 	// the size (in pixels) of resulting image, where image coordinates range -image_size/2 to +image_size/2
-	config->image_size             = 1024.0;
+	config->image_size             = 128.0;
 
 	// if the image is too big, can specify a subregion where x_render and y_render offsets are the bottom corner of image
 	// and render_size the amount of pixels from those coordinates in each direction you want your image. 0,0 is middle of image.
-	config->render_size            = 256;
-	config->x_render_offset        = -128;
-	config->y_render_offset        = -128;
+	config->render_size            = config->image_size;
+	config->x_render_offset        = -(config->image_size / 2);
+	config->y_render_offset        = -(config->image_size / 2);
 
 	// Set the data to be right ascension, flips the u and w coordinate.
 	config->enable_right_ascension = false;
@@ -91,6 +91,11 @@ void init_config(Config *config)
 	// set amount of visibilities per batch size, use 0 for no batching..
 	// Will do a remainder batch if visibility count not divisible by batch size
 	config->vis_batch_size         = 0;
+
+	// Max number of threads per block dimension. Note this is 2D problem,
+	// so actual number of full threads per block is this value squared.
+	// i.e: 32^2 = 1024 threads per block - this is GPU specific.
+	config->gpu_num_threads_per_block_dimension = 32;
 }
 
 /*
@@ -114,9 +119,10 @@ void create_perfect_image(Config *config, Complex *grid, Visibility *visibilitie
 	CUDA_CHECK_RETURN((cudaMemcpy2D(d_g, g_pitch, grid, config->render_size * sizeof(Complex),
 		config->render_size * sizeof(Complex), config->render_size, cudaMemcpyHostToDevice)));
 
-	// set BLOCK and THREAD count for CUDA configuration : ToDO later, make more dynamic depending on hardware
-	dim3 kernel_blocks(8, 8, 1);
-	dim3 kernel_threads((config->render_size)/8, (config->render_size)/8, 1);  //can play with block and thread sizes
+	int max_threads_per_block_dim = min(config->gpu_num_threads_per_block_dimension, config->render_size);
+	int num_blocks = (int) ceil((double) config->render_size / max_threads_per_block_dim);
+	dim3 kernel_blocks(num_blocks, num_blocks, 1);
+	dim3 kernel_threads(max_threads_per_block_dim, max_threads_per_block_dim, 1);
 
 	// calculate number of batches and determine any remainder visibilities
 	int number_of_batches = 1;
@@ -155,7 +161,7 @@ void create_perfect_image(Config *config, Complex *grid, Visibility *visibilitie
 
 		// iDFT performed on a portion of the image (assuming 0,0 in center of image), coordinates are from x and y render offset
 		// origin to render size - Image must be square
-		inverse_dft_with_w_correction<<<kernel_threads, kernel_blocks>>>(d_g, g_pitch, v_k, vi_k,
+		inverse_dft_with_w_correction<<<kernel_blocks, kernel_threads>>>(d_g, g_pitch, v_k, vi_k,
 			config->vis_count, visibilities_per_batch, config->x_render_offset,
 			config->y_render_offset, config->render_size, config->cell_size);
 		cudaDeviceSynchronize();
@@ -179,7 +185,7 @@ void create_perfect_image(Config *config, Complex *grid, Visibility *visibilitie
 		cudaDeviceSynchronize();
 
 		printf(">>> UPDATE: Executing final iDFT CUDA kernel call...\n\n");
-		inverse_dft_with_w_correction<<<kernel_threads, kernel_blocks>>>(d_g, g_pitch, v_k, vi_k,
+		inverse_dft_with_w_correction<<<kernel_blocks, kernel_threads>>>(d_g, g_pitch, v_k, vi_k,
 			config->vis_count, visibilities_on_last_batch, config->x_render_offset,
 			config->y_render_offset, config->render_size, config->cell_size);
 		cudaDeviceSynchronize();
@@ -324,7 +330,7 @@ __global__ void inverse_dft_with_w_correction(double2 *grid, size_t grid_pitch, 
     double y = (idy+y_offset) * cell_size;
 
 	double2 vis;
-	double2 theta_complex;
+	double2 theta_complex = make_double2(0.0, 0.0);
 
 	// precalculate image correction and wCorrection
 	double image_correction = sqrt(1.0 - (x * x) - (y * y));
@@ -338,7 +344,7 @@ __global__ void inverse_dft_with_w_correction(double2 *grid, size_t grid_pitch, 
 	{	
 		double theta = 2.0 * M_PI * (x * visibilities[i].x + y * visibilities[i].y
 				+ (w_correction * visibilities[i].z));
-		theta_complex = make_double2(cos(theta), sin(theta));
+		sincos(theta, &(theta_complex.y), &(theta_complex.x));
 		vis = complex_multiply(vis_intensity[i], theta_complex);
 		real_sum += vis.x;
 		imag_sum += vis.y;
@@ -386,6 +392,7 @@ void unit_test_init_config(Config *config)
 	config->y_render_offset        = -512;
 	config->enable_right_ascension = false;
 	config->vis_batch_size         = 0;
+	config->gpu_num_threads_per_block_dimension = 32;
 }
 
 double unit_test_generate_approximate_image()
